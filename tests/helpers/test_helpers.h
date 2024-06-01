@@ -18,7 +18,7 @@
     REQUIRE (file.existsAsFile());
    });
 
- */
+
 [[maybe_unused]] void runWithinPluginEditor (const std::function<void (PluginProcessor& plugin)>& testCode)
 {
     PluginProcessor plugin;
@@ -30,3 +30,4 @@
     plugin.editorBeingDeleted (editor);
     delete editor;
 }
+*/
