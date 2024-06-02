@@ -1,7 +1,11 @@
 #include "Settings.h"
 #include <juce_dsp/juce_dsp.h>
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_templated.hpp>
+#include <utility>
 
+//TODO: tipizzare con type
 juce::Array<float> getBinEnergies (const juce::dsp::FFT* forwardFFT, juce::AudioBuffer<float> in)
 {
     auto* inRead = in.getArrayOfReadPointers();
@@ -36,29 +40,25 @@ juce::Array<float> getBinEnergies (const juce::dsp::FFT* forwardFFT, juce::Audio
     return binEnergies;
 }
 
-class AudioBufferMatcher : public Catch::Matchers::MatcherBase<juce::AudioBuffer<float>>
+template<typename Type>
+struct AudioBufferMatcher : Catch::Matchers::MatcherGenericBase
 {
-    juce::AudioBuffer<float> otherBuffer;
-
 public:
-    AudioBufferMatcher (juce::AudioBuffer<float> const& other) : otherBuffer (other) {}
+    AudioBufferMatcher (juce::AudioBuffer<Type> const& buffer) : buffer (buffer) {}
 
-    bool match (juce::AudioBuffer<float> const& in) const override
+    bool match (juce::AudioBuffer<Type> const& other) const
     {
-        //return in >= m_begin && in <= m_end;
-        auto* inRead = in.getArrayOfReadPointers();
-        auto* othRead = otherBuffer.getArrayOfReadPointers();
-
-        if (in.getNumChannels() != otherBuffer.getNumChannels() || in.getNumSamples() != otherBuffer.getNumSamples())
-        {
+        if (buffer.getNumChannels() != other.getNumChannels() || buffer.getNumSamples() != other.getNumSamples())
             return false;
-        }
 
-        for (int ch = 0; ch < in.getNumChannels(); ++ch)
+        auto* inRead  = buffer.getArrayOfReadPointers();
+        auto* othRead = other.getArrayOfReadPointers();
+
+        for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
         {
-            for (int sam = 0; sam < in.getNumSamples(); ++sam)
+            for (int sam = 0; sam < buffer.getNumSamples(); ++sam)
             {
-                if (std::fabs (inRead[ch][sam] - othRead[ch][sam]) > std::numeric_limits<float>::epsilon())
+                if (std::fabs (inRead[ch][sam] - othRead[ch][sam]) > std::numeric_limits<Type>::epsilon())
                 {
                     return false;
                 }
@@ -70,15 +70,16 @@ public:
 
     std::string describe() const override
     {
-        std::ostringstream ss;
-        ss << "AudioBuffers are the same ";
-        return ss.str();
+        return "AudioBuffers have the same values and lenght";
     }
+
+private:
+    juce::AudioBuffer<Type> buffer;
 };
 
-AudioBufferMatcher AudioBuffersMatch (juce::AudioBuffer<float> other)
-{
-    return { other };
+template<typename Type>
+auto AudioBuffersMatch (juce::AudioBuffer<Type> buffer) -> AudioBufferMatcher<Type>{
+ return AudioBufferMatcher<Type>{buffer};
 }
 
 class AudioBufferEnergyMatcher : public Catch::Matchers::MatcherBase<juce::AudioBuffer<float>>
@@ -86,7 +87,11 @@ class AudioBufferEnergyMatcher : public Catch::Matchers::MatcherBase<juce::Audio
     juce::AudioBuffer<float> otherBuffer;
 
 public:
-    AudioBufferEnergyMatcher (juce::AudioBuffer<float> other) : otherBuffer (other), forwardFFT (fft_order), window { fft_size, juce::dsp::WindowingFunction<float>::WindowingMethod::hann } {}
+    AudioBufferEnergyMatcher (juce::AudioBuffer<float> other) :
+                                                                         otherBuffer (std::move(other)),
+                                                                         forwardFFT (fft_order)
+                                                                         //window { fft_size, juce::dsp::WindowingFunction<float>::WindowingMethod::hann }
+    {}
 
     bool match (juce::AudioBuffer<float> const& in) const override
     {
@@ -107,31 +112,23 @@ public:
             othPower += othEnergies[i];
         }
 
-        if (inPower < othPower)
-        {
-            return true;
-        }
-        else
-        {
-            return false;
-        }
+        return inPower < othPower;
+
     }
 
     std::string describe() const override
     {
-        std::ostringstream ss;
-        ss << "Other buffer has higher total energy";
-        return ss.str();
+        return "Other buffer has higher total energy";
     }
 
 private:
     juce::dsp::FFT forwardFFT;
-    juce::dsp::WindowingFunction<float> window;
+    //juce::dsp::WindowingFunction<float> window;
 };
 
 AudioBufferEnergyMatcher AudioBufferHigherEnergy (juce::AudioBuffer<float> other)
 {
-    return { other };
+    return  AudioBufferEnergyMatcher(other);
 }
 
 class AudioBufferMaxEnergyMatcher : public Catch::Matchers::MatcherBase<juce::AudioBuffer<float>>

@@ -5,7 +5,7 @@
 
 class Helpers {
 public:
-    static juce::AudioBuffer<float>* noiseGenerator(int channels = 2, int samples = 4096);
+    static std::unique_ptr<juce::AudioBuffer<float>> noiseGenerator(int channels = 2, int samples = 4096);
     static juce::AudioBuffer<float>* generateIncreasingAudioSampleBuffer(int channels = 2, int samples = 4096);
     static juce::MemoryMappedAudioFormatReader* readSineSweep();
     static void writeBufferToFile(juce::AudioBuffer<float>* buffer, juce::String path);

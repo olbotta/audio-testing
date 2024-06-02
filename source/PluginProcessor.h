@@ -2,9 +2,7 @@
 #include "DryWet.h"
 #include "Parameters.h"
 #include <juce_dsp/juce_dsp.h>
-//#include <juce_audio_processors/juce_audio_processors.h>
-//#include <juce_data_structures/juce_data_structures.h>
-
+#include <juce_audio_processors/juce_audio_processors.h>
 
 class FilterAudioProcessor  : public juce::AudioProcessor, public juce::AudioProcessorValueTreeState::Listener
 {
@@ -49,10 +47,8 @@ private:
 
     juce::AudioProcessorValueTreeState parameters;
     DryWet drywetter;
-    float cutoff;
     juce::dsp::StateVariableTPTFilter<float> tptFilter;
     juce::dsp::ProcessorDuplicator<juce::dsp::StateVariableTPTFilter<float>, juce::dsp::IIR::Coefficients <float>> filter;
-    double fs;
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FilterAudioProcessor)

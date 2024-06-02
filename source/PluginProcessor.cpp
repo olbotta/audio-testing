@@ -4,16 +4,15 @@ FilterAudioProcessor::FilterAudioProcessor()
     : parameters (*this, nullptr, "Filter Parameters", Parameters::createParameterLayout())
 {
     parameters.addParameterListener (NAME_DW, this);
-    parameters.addParameterListener (NAME_CUTOFF, static_cast<Listener*> (this));
+    parameters.addParameterListener (NAME_CUTOFF, this);
     drywetter.setDryWetRatio (DEFAULT_DW);
-    cutoff = 1000.0f;
+
     tptFilter.setType(juce::dsp::StateVariableTPTFilterType::highpass);
 }
 
 //==============================================================================
 void FilterAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    this->fs = sampleRate;
     drywetter.prepareToPlay (sampleRate, samplesPerBlock);
 
     juce::dsp::ProcessSpec spec { sampleRate, static_cast<juce::uint32> (samplesPerBlock), 2 };
@@ -34,7 +33,6 @@ void FilterAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce:
     juce::dsp::ProcessContextReplacing<float> context (block);
     tptFilter.process(context);
 
-    // Miscelo il segnale pulito salvato in drywetter con quello processato da delay
     drywetter.merge (buffer);
 }
 

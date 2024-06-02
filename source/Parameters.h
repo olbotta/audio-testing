@@ -1,9 +1,10 @@
 #pragma once
 
-//#include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_audio_utils/juce_audio_utils.h>
 
-#define SMOOTHING_TIME 0.04
+//#define SMOOTHING_TIME 0.0f
+#define SMOOTHING_TIME 0.04f
 
 // Actual parameters
 #define NAME_DW 	"dw"

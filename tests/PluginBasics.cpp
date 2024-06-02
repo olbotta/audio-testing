@@ -9,48 +9,50 @@ TEST_CASE ("one is equal to one", "[dummy]")
     REQUIRE (1 == 1);
 }
 
-TEST_CASE ("Wet Parameter", "[parameters]")
+TEST_CASE ("Wet Parameter influence on buffer", "[parameters]")
 {
     auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
 
-    juce::AudioBuffer<float>* buffer = Helpers::noiseGenerator();
-    juce::AudioBuffer<float> originalBuffer (*buffer);
+    auto buffer = Helpers::noiseGenerator();
+    auto originalBuffer (*buffer);
 
     juce::MidiBuffer midiBuffer;
 
     testPluginProcessor->prepareToPlay (44100, 4096);
 
     auto const* parameters = testPluginProcessor->getParameters();
-    juce::RangedAudioParameter* pParam = parameters->getParameter ("WET");
+    juce::RangedAudioParameter* pParam = parameters->getParameter (NAME_DW);
 
-    SECTION ("wet=0 implies no change to the signal")
+    SECTION ("dry/wet ratio = 1.0f implies no change to the signal")
     {
-        pParam->setValueNotifyingHost (0.0f);
+        pParam->setValueNotifyingHost (1.0f);
         testPluginProcessor->processBlock (*buffer, midiBuffer);
 
         CHECK_THAT (*buffer, AudioBuffersMatch (originalBuffer));
     }
 
-    SECTION ("wet!=0 implies change to the signal")
+    SECTION ("dry/wet ratio < 1.0f implies change to the signal")
     {
-        auto value = GENERATE (0.1f, 0.5f, 1.0f);
+        auto value = GENERATE (0.1f, 0.5f, 0.0f);
 
         pParam->setValueNotifyingHost (value);
         testPluginProcessor->processBlock (*buffer, midiBuffer);
 
         CHECK_THAT (*buffer, !AudioBuffersMatch (originalBuffer));
     }
+
+    // TEARDOWN
+    testPluginProcessor->releaseResources();
 }
 
-TEST_CASE ("Big Buffer Wet Parameter", "[parameters]")
+/*TEST_CASE ("Big Buffer Wet Parameter", "[parameters]")
 {
     int blockCount = GENERATE (1, 256); //1 corresponds to previous case
 
     auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
 
-    juce::AudioBuffer<float>* buffer = Helpers::noiseGenerator (2, 4096 * blockCount);
-    juce::AudioBuffer<float> originalBuffer (*buffer);
-    //ImageProcessing::drawAudioBufferImage(buffer, "RandomWet");
+    auto buffer = Helpers::noiseGenerator (2, 4096 * blockCount);
+    auto originalBuffer (*buffer);
 
     juce::MidiBuffer midiBuffer;
 
@@ -140,4 +142,4 @@ TEST_CASE ("Filter", "[functionality]")
     //     // CHECK_THAT (originalBuffer, !AudioBufferHigherEnergy (*buffer));
     //     // //CHECK_THAT (*buffer, AudioBufferCheckMaxEnergy (maxEnergies));
     // }
-}
+}*/

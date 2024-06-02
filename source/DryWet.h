@@ -1,7 +1,7 @@
 #pragma once
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_core/juce_core.h>
-//#include <juce_SmoothedValue.h>
+
 #include "Parameters.h"
 #include <cmath>
 
@@ -41,17 +41,18 @@ public:
         smoothedDryLevel.applyGain (drySignal, numSamples); //v3 oss: scrive numSamples! non drySignal.getNumSamples()
 
         for (int ch = wetBuffer.getNumChannels(); --ch >= 0;) //ciclo strano di presti che scorre i canali al contrario
-        { //add stored dry buffer to wet buffer
-            wetBuffer.addFrom (ch, 0, drySignal, ch, 0, numSamples); //v1,v3
-            // wetBuffer.addFrom(ch, 0, drySignal, ch, 0, numSamples, dryLevel); //v2, più compatta e ottimizzata
+        {
+            wetBuffer.addFrom (ch, 0, drySignal, ch, 0, numSamples);
         }
     }
 
     void setDryWetRatio (const float newValue)
     {
         dryWetRatio = newValue;
-        smoothedWetLevel.setTargetValue (sqrt (1 - dryWetRatio));
-        smoothedDryLevel.setTargetValue (sqrt (dryWetRatio));
+        smoothedWetLevel.setCurrentAndTargetValue (sqrt (1 - dryWetRatio));
+        smoothedDryLevel.setCurrentAndTargetValue (sqrt (dryWetRatio));
+        //smoothedWetLevel.setTargetValue (sqrt (1 - dryWetRatio));
+        //smoothedDryLevel.setTargetValue (sqrt (dryWetRatio));
     }
 
 private:
@@ -61,5 +62,5 @@ private:
 
     juce::AudioBuffer<float> drySignal;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DryWet);
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(DryWet)
 };
