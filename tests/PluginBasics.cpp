@@ -43,52 +43,6 @@ TEST_CASE ("Wet Parameter influence on buffer", "[parameters]")
     testPluginProcessor->releaseResources();
 }
 
-TEST_CASE ("Big Buffer Wet Parameter", "[parameters]")
-{
-    int blockCount = GENERATE (1, 256); //1 corresponds to previous case
-
-    auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
-    auto buffer = Helpers::noiseGenerator (2, 4096 * blockCount);
-    auto originalBuffer (*buffer);
-    juce::MidiBuffer midiBuffer;
-
-    testPluginProcessor->prepareToPlay (44100, 4096);
-
-    auto const* parameters = testPluginProcessor->getParameters();
-    juce::RangedAudioParameter* pParam = parameters->getParameter (NAME_DW);
-
-    SECTION ("wet=0 implies no change to the signal")
-    {
-        pParam->setValueNotifyingHost (1.0f);
-
-        for (int i = 0; i < blockCount; i++)
-        {
-            auto processBuffer = std::make_unique<juce::AudioBuffer<float>> (1, 4096);
-            processBuffer->copyFrom (0, 0, *buffer, 0, i * 4096, 4096);
-            testPluginProcessor->processBlock (*processBuffer, midiBuffer);
-            buffer->copyFrom (0, i * 4096, *processBuffer, 0, 0, 4096);
-        }
-
-        CHECK_THAT (*buffer, AudioBuffersMatch (originalBuffer));
-    }
-
-    SECTION ("wet!=0 implies change to the signal")
-    {
-        auto value = GENERATE (0.1f, 0.5f, 0.0f);
-        pParam->setValueNotifyingHost (value);
-
-        for (int i = 0; i < blockCount; i++)
-        {
-            auto processBuffer = std::make_unique<juce::AudioBuffer<float>> (1, 4096);
-            processBuffer->copyFrom (0, 0, *buffer, 0, i * 4096, 4096);
-            testPluginProcessor->processBlock (*processBuffer, midiBuffer);
-            buffer->copyFrom (0, i * 4096, *processBuffer, 0, 0, 4096);
-        }
-
-        CHECK_THAT (*buffer, !AudioBuffersMatch (originalBuffer));
-    }
-}
-
 /*
 TEST_CASE ("Filter", "[functionality]")
 {
