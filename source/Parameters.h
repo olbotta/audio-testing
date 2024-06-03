@@ -11,7 +11,7 @@
 #define NAME_CUTOFF "co"
 
 #define DEFAULT_DW 0.5f
-#define DEFAULT_CO 1000.0f
+#define DEFAULT_CO 2000.0f
 
 namespace Parameters
 {

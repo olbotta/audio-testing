@@ -7,7 +7,7 @@ FilterAudioProcessor::FilterAudioProcessor()
     parameters.addParameterListener (NAME_CUTOFF, this);
     drywetter.setDryWetRatio (DEFAULT_DW);
 
-    tptFilter.setType(juce::dsp::StateVariableTPTFilterType::highpass);
+    tptFilter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
 }
 
 //==============================================================================
