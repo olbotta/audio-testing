@@ -56,7 +56,7 @@ public:
     }
 
 private:
-    float dryWetRatio = 0.5;
+    float dryWetRatio = 0.5; // 1 = completely dry, 0 completely wet
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedDryLevel;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> smoothedWetLevel;
 

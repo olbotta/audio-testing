@@ -5,27 +5,28 @@
 #include <catch2/matchers/catch_matchers_templated.hpp>
 #include <utility>
 
-//TODO: tipizzare con type
-juce::Array<float> getBinEnergies (const juce::dsp::FFT* forwardFFT, juce::AudioBuffer<float> in)
+//TODO: write it using JUCE guide
+template<typename Type>
+juce::Array<Type> getBinEnergies (const juce::dsp::FFT* forwardFFT, juce::AudioBuffer<Type> in)
 {
     auto* inRead = in.getArrayOfReadPointers();
 
-    std::array<float, fft_size> inFifo;
-    std::array<float, fft_size * 2> inFftData;
-    juce::Array<float> binEnergies;
-    int fifoIndex = 0;
+    std::array<Type, fft_size> inFifo;
+    std::array<Type, fft_size * 2> inFftData;
+    juce::Array<Type> binEnergies;
+    unsigned long fifoIndex = 0;
 
     for (int sam = 0; sam < in.getNumSamples(); ++sam)
     {
         for (int ch = 0; ch < in.getNumChannels(); ++ch)
         {
-            if (fifoIndex == fft_size)
+            if (fifoIndex == fft_size)//end of the bin(?)
             {
-                std::ranges::fill (inFftData.begin(), inFftData.end(), 0.0f);
-                std::ranges::copy (inFifo.begin(), inFifo.end(), inFftData.begin());// questo non è un'altra inizializzazone a 0?
+                std::ranges::fill (inFftData.begin(), inFftData.end(), 0.0f);//superfluo? (viene sovrascritto subito dopo)
+                std::ranges::copy (inFifo.begin(), inFifo.end(), inFftData.begin());
                 forwardFFT->performFrequencyOnlyForwardTransform (inFftData.data(), true);
 
-                for (unsigned int fftIndex = 0; fftIndex < inFftData.size() / 2; fftIndex++)
+                for (unsigned long fftIndex = 0; fftIndex < inFftData.size() / 2; fftIndex++)
                 {
                     binEnergies.set (fftIndex, binEnergies[fftIndex] + inFftData[fftIndex]);
                 }
@@ -82,53 +83,51 @@ auto AudioBuffersMatch (juce::AudioBuffer<Type> buffer) -> AudioBufferMatcher<Ty
  return AudioBufferMatcher<Type>{buffer};
 }
 
-class AudioBufferEnergyMatcher : public Catch::Matchers::MatcherBase<juce::AudioBuffer<float>>
+template<typename Type>
+struct AudioBufferLowerEnergyMatcher : Catch::Matchers::MatcherGenericBase
 {
-    juce::AudioBuffer<float> otherBuffer;
-
 public:
-    AudioBufferEnergyMatcher (juce::AudioBuffer<float> other) :
-                                                                         otherBuffer (std::move(other)),
-                                                                         forwardFFT (fft_order)
-                                                                         //window { fft_size, juce::dsp::WindowingFunction<float>::WindowingMethod::hann }
+    AudioBufferLowerEnergyMatcher (juce::AudioBuffer<Type> const& buffer) :
+                                                                     forwardFFT (fft_order),
+                                                                     buffer (buffer)
+                                                                //window { fft_size, juce::dsp::WindowingFunction<float>::WindowingMethod::hann }
     {}
 
-    bool match (juce::AudioBuffer<float> const& in) const override
+    bool match (juce::AudioBuffer<Type> const& other) const
     {
-        float inPower = 0;
-        float othPower = 0;
-
-        if (in.getNumChannels() != otherBuffer.getNumChannels() || in.getNumSamples() != otherBuffer.getNumSamples())
-        {
+        if (buffer.getNumChannels() != other.getNumChannels() || buffer.getNumSamples() != other.getNumSamples())
             return false;
-        }
 
-        juce::Array<float> inEnergies = getBinEnergies (&forwardFFT, in);
-        juce::Array<float> othEnergies = getBinEnergies (&forwardFFT, otherBuffer);
+        Type bufferPower = 0;
+        Type otherPower = 0;
+        juce::Array<Type> bufferEnergies = getBinEnergies (&forwardFFT, buffer);
+        juce::Array<Type> otherEnergies  = getBinEnergies (&forwardFFT, other);
 
-        for (int i = 0; i < inEnergies.size(); i++)
+        for (int i = 0; i < bufferEnergies.size(); i++)
         {
-            inPower += inEnergies[i];
-            othPower += othEnergies[i];
+            bufferPower += bufferEnergies[i];
+            otherPower  += otherEnergies[i];
         }
 
-        return inPower < othPower;
+        std::cout<< "bufferPower: " + std::to_string(bufferPower) + ", otherPower: "+ std::to_string(otherPower) + "\n";
+
+        return bufferPower < otherPower;
 
     }
 
     std::string describe() const override
     {
-        return "Other buffer has higher total energy";
+        return "Has lower cumulative energy than other";
     }
 
 private:
     juce::dsp::FFT forwardFFT;
-    //juce::dsp::WindowingFunction<float> window;
+    juce::AudioBuffer<Type> buffer;
 };
 
-AudioBufferEnergyMatcher AudioBufferHigherEnergy (juce::AudioBuffer<float> other)
-{
-    return  AudioBufferEnergyMatcher(other);
+template<typename Type>
+auto AudioBufferLowerEnergy (juce::AudioBuffer<Type> buffer) -> AudioBufferLowerEnergyMatcher<Type>{
+    return AudioBufferLowerEnergyMatcher<Type>{buffer};
 }
 
 class AudioBufferMaxEnergyMatcher : public Catch::Matchers::MatcherBase<juce::AudioBuffer<float>>

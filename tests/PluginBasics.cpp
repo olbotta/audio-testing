@@ -1,8 +1,13 @@
-#include "Helpers.h"
-#include "Matchers.h"
+#include "helpers/Helpers.h"
+#include "helpers/Matchers.h"
+#include "helpers/sine sweep/SineSweep.h"
 #include <PluginProcessor.h>
 #include <catch2/catch_all.hpp>
 #include <juce_audio_processors/juce_audio_processors.h>
+
+const int samplesPerBlock = 4096;
+const int sampleRate = 44100;
+const int channelsNumber = 2;
 
 TEST_CASE ("one is equal to one", "[dummy]")
 {
@@ -12,11 +17,11 @@ TEST_CASE ("one is equal to one", "[dummy]")
 TEST_CASE ("Wet Parameter influence on buffer", "[parameters]")
 {
     auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
-    auto buffer = Helpers::noiseGenerator();
+    auto buffer = Helpers::noiseGenerator(channelsNumber,samplesPerBlock);
     auto originalBuffer (*buffer);
     juce::MidiBuffer midiBuffer;
 
-    testPluginProcessor->prepareToPlay (44100, 4096);
+    testPluginProcessor->prepareToPlay (sampleRate, samplesPerBlock);
 
     auto const* parameters = testPluginProcessor->getParameters();
     juce::RangedAudioParameter* pParam = parameters->getParameter (NAME_DW);
@@ -31,12 +36,19 @@ TEST_CASE ("Wet Parameter influence on buffer", "[parameters]")
 
     SECTION ("dry/wet ratio < 1.0f implies change to the signal")
     {
-        auto value = GENERATE (0.1f, 0.5f, 0.0f);
+        auto value = GENERATE (0.1f, 0.1f, 0.5f);
 
         pParam->setValueNotifyingHost (value);
         testPluginProcessor->processBlock (*buffer, midiBuffer);
 
-        CHECK_THAT (*buffer, !AudioBuffersMatch (originalBuffer));
+            SECTION("signal is not the same")
+            {
+                CHECK_THAT (*buffer, !AudioBuffersMatch (originalBuffer));
+            }
+            SECTION("signal cumulative energy decreases")
+            {
+                CHECK_THAT (*buffer, AudioBufferLowerEnergy (originalBuffer));
+            }
     }
 
     // TEARDOWN

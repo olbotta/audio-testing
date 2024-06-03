@@ -14,9 +14,9 @@ std::unique_ptr<juce::AudioBuffer<float>> Helpers::noiseGenerator(int channels, 
     return buffer;
 }
 
-juce::AudioBuffer<float>* Helpers::generateIncreasingAudioSampleBuffer(int channels, int samples)
+std::unique_ptr<juce::AudioBuffer<float>>  Helpers::generateIncreasingAudioSampleBuffer(int channels, int samples)
 {
-    juce::AudioBuffer<float> *buffer = new juce::AudioBuffer<float>(channels, samples);
+    auto buffer = std::make_unique<juce::AudioBuffer<float>>(channels, samples);
 
     //Fill with increasing values ranging from -1 to 1
     for (int i = 0; i < channels; i++) {
