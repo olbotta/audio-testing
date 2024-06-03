@@ -12,10 +12,8 @@ TEST_CASE ("one is equal to one", "[dummy]")
 TEST_CASE ("Wet Parameter influence on buffer", "[parameters]")
 {
     auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
-
     auto buffer = Helpers::noiseGenerator();
     auto originalBuffer (*buffer);
-
     juce::MidiBuffer midiBuffer;
 
     testPluginProcessor->prepareToPlay (44100, 4096);
@@ -45,25 +43,23 @@ TEST_CASE ("Wet Parameter influence on buffer", "[parameters]")
     testPluginProcessor->releaseResources();
 }
 
-/*TEST_CASE ("Big Buffer Wet Parameter", "[parameters]")
+TEST_CASE ("Big Buffer Wet Parameter", "[parameters]")
 {
     int blockCount = GENERATE (1, 256); //1 corresponds to previous case
 
     auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
-
     auto buffer = Helpers::noiseGenerator (2, 4096 * blockCount);
     auto originalBuffer (*buffer);
-
     juce::MidiBuffer midiBuffer;
 
     testPluginProcessor->prepareToPlay (44100, 4096);
 
     auto const* parameters = testPluginProcessor->getParameters();
-    juce::RangedAudioParameter* pParam = parameters->getParameter ("WET");
+    juce::RangedAudioParameter* pParam = parameters->getParameter (NAME_DW);
 
     SECTION ("wet=0 implies no change to the signal")
     {
-        pParam->setValueNotifyingHost (0.0f);
+        pParam->setValueNotifyingHost (1.0f);
 
         for (int i = 0; i < blockCount; i++)
         {
@@ -78,7 +74,7 @@ TEST_CASE ("Wet Parameter influence on buffer", "[parameters]")
 
     SECTION ("wet!=0 implies change to the signal")
     {
-        auto value = GENERATE (0.1f, 0.5f, 1.0f);
+        auto value = GENERATE (0.1f, 0.5f, 0.0f);
         pParam->setValueNotifyingHost (value);
 
         for (int i = 0; i < blockCount; i++)
@@ -93,6 +89,7 @@ TEST_CASE ("Wet Parameter influence on buffer", "[parameters]")
     }
 }
 
+/*
 TEST_CASE ("Filter", "[functionality]")
 {
     int samplesPerBlock = 4096;
