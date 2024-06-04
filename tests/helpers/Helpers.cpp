@@ -1,6 +1,7 @@
 #include "Helpers.h"
+#include "sine sweep/SineSweep.h"
 
-std::unique_ptr<juce::AudioBuffer<float>> Helpers::noiseGenerator(int channels, int samples)
+std::unique_ptr<juce::AudioBuffer<float>> Helpers::generateNoise(int channels, int samples)
 {
     auto buffer = std::make_unique<juce::AudioBuffer<float>>(channels, samples);
 
@@ -28,52 +29,23 @@ std::unique_ptr<juce::AudioBuffer<float>>  Helpers::generateIncreasingAudioSampl
     return buffer;
 }
 
-juce::MemoryMappedAudioFormatReader* Helpers::readSineSweep()
+//TODO: test this
+std::unique_ptr<juce::AudioBuffer<float>>  Helpers::generateSineSweep(int channels, int samples, float sampleRate)
 {
-    juce::AudioFormatManager formatManager;
-    formatManager.registerBasicFormats();
-    juce::AudioFormat *audioFormat = formatManager.getDefaultFormat();
+    auto buffer = std::make_unique<juce::AudioBuffer<float>>(channels, samples);
+    SineSweep sineSweep(sampleRate);
+    sineSweep.setSweepRange(20.0f, 20000.0f);
+    sineSweep.setSweepDuration(5.0f);
+    sineSweep.reset();
 
-    juce::MemoryMappedAudioFormatReader *reader = audioFormat->createMemoryMappedReader(juce::File("samples/CSC_sweep_20-20k_amped.wav"));
-    reader->mapEntireFile();
-
-    return reader;
-}
-
-void Helpers::writeBufferToFile(juce::AudioBuffer<float>* buffer, juce::String path)
-{
-    juce::File bufferFile = juce::File(path);
-    juce::FileOutputStream output (bufferFile);
-
-    output.setNewLineString("\n");
-
-    output.writeInt(buffer->getNumChannels());
-    output.writeInt(buffer->getNumSamples());
-
-    for (int i = 0; i < buffer->getNumChannels(); i++) {
-        for (int j = 0; j < buffer->getNumSamples(); j++) {
-            output.writeFloat(buffer->getSample(i,j));
+    for (int sample = 0; sample < buffer->getNumSamples(); ++sample)
+    {
+        float sweepSample = sineSweep.getNextSample();
+        for (int channel = 0; channel < buffer->getNumChannels(); ++channel)
+        {
+            buffer->setSample(channel, sample, sweepSample);
         }
     }
 
-    output.flush();
-}
-
-juce::AudioBuffer<float>* Helpers::readBufferFromFile(juce::String path)
-{
-    juce::File bufferFile = juce::File(path);
-
-    juce::FileInputStream input (bufferFile);
-
-    int numChannels = input.readInt();
-    int numSamples = input.readInt();
-
-    juce::AudioBuffer<float> *buffer = new juce::AudioBuffer<float>(numChannels, numSamples);
-    for (int i = 0; i < buffer->getNumChannels(); i++) {
-        for (int j = 0; j < buffer->getNumSamples(); j++) {
-            buffer->setSample(i, j, input.readFloat());
-        }
-    }
     return buffer;
 }
-

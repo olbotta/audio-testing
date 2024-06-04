@@ -1,8 +1,8 @@
-#include "Settings.h"
-#include <juce_dsp/juce_dsp.h>
-#include <juce_audio_processors/juce_audio_processors.h>
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers_templated.hpp>
+#include "../Settings.h"
+#include "catch2/catch_test_macros.hpp"
+#include "catch2/matchers/catch_matchers_templated.hpp"
+#include "juce_audio_processors/juce_audio_processors.h"
+#include "juce_dsp/juce_dsp.h"
 #include <utility>
 
 //TODO: write it using JUCE guide
@@ -45,7 +45,7 @@ template<typename Type>
 struct AudioBufferMatcher : Catch::Matchers::MatcherGenericBase
 {
 public:
-    AudioBufferMatcher (juce::AudioBuffer<Type> const& buffer) : buffer (buffer) {}
+    explicit AudioBufferMatcher (juce::AudioBuffer<Type> const& buffer) : buffer (buffer) {}
 
     bool match (juce::AudioBuffer<Type> const& other) const
     {
@@ -71,7 +71,7 @@ public:
 
     std::string describe() const override
     {
-        return "AudioBuffers have the same values and lenght";
+        return "AudioBuffers should have same length and internal values";
     }
 
 private:
@@ -87,14 +87,13 @@ template<typename Type>
 struct AudioBufferLowerEnergyMatcher : Catch::Matchers::MatcherGenericBase
 {
 public:
-    AudioBufferLowerEnergyMatcher (juce::AudioBuffer<Type> const& buffer) :
+    explicit AudioBufferLowerEnergyMatcher (juce::AudioBuffer<Type> const& buffer) :
                                                                      forwardFFT (fft_order),
                                                                      buffer (buffer)
-                                                                //window { fft_size, juce::dsp::WindowingFunction<float>::WindowingMethod::hann }
     {}
 
     bool match (juce::AudioBuffer<Type> const& other) const
-    {
+    { // ⚠️ @code other refers to the first argument of CHECK_THAT / REQUIRES_THAT
         if (buffer.getNumChannels() != other.getNumChannels() || buffer.getNumSamples() != other.getNumSamples())
             return false;
 
@@ -111,13 +110,13 @@ public:
 
         std::cout<< "bufferPower: " + std::to_string(bufferPower) + ", otherPower: "+ std::to_string(otherPower) + "\n";
 
-        return bufferPower < otherPower;
+        return otherPower < bufferPower;
 
     }
 
     std::string describe() const override
     {
-        return "Has lower cumulative energy than other";
+        return "Buffer should have lower cumulative energy than other";
     }
 
 private:
@@ -126,90 +125,42 @@ private:
 };
 
 template<typename Type>
-auto AudioBufferLowerEnergy (juce::AudioBuffer<Type> buffer) -> AudioBufferLowerEnergyMatcher<Type>{
+auto HasLowerCumulativeEnergyThan (juce::AudioBuffer<Type> buffer) -> AudioBufferLowerEnergyMatcher<Type>{
     return AudioBufferLowerEnergyMatcher<Type>{buffer};
 }
 
-class AudioBufferMaxEnergyMatcher : public Catch::Matchers::MatcherBase<juce::AudioBuffer<float>>
+template<typename Type>
+struct AudioBufferLowerEnergyFftBinsMatcher : public Catch::Matchers::MatcherGenericBase
 {
-    juce::Array<float> maxEnergies;
-
 public:
-    AudioBufferMaxEnergyMatcher (juce::Array<float> other) : maxEnergies (other), forwardFFT (fft_order), window { fft_size, juce::dsp::WindowingFunction<float>::WindowingMethod::hann } {}
+    explicit AudioBufferLowerEnergyFftBinsMatcher (juce::Array<Type> fftBinsValues) :
+                                                                    fftBinsValues (fftBinsValues),
+                                                                    forwardFFT (fft_order)
+    {}
 
-    bool match (juce::AudioBuffer<float> const& in) const override
+    bool match (juce::AudioBuffer<Type> const& other) const
     {
-        juce::Array<float> binEnergies = getBinEnergies (&forwardFFT, in);
+        juce::Array<Type> bufferBinEnergies = getBinEnergies (&forwardFFT, other);
 
-        for (int i = 0; i < maxEnergies.size(); i++)
+        for (int i = 0; i < fftBinsValues.size(); i++)
         {
-            if (maxEnergies[i] == -1)
-            {
+            if (fftBinsValues[i] == -1)//flagged as don't control TODO: refactor to more clear function
                 continue;
-            }
-            if (binEnergies[i] > maxEnergies[i])
-            {
+
+            if (bufferBinEnergies[i] < fftBinsValues[i])
                 return false;
-            }
         }
         return true;
     }
 
-    std::string describe() const override
-    {
-        std::ostringstream ss;
-        ss << "Energies too high";
-        return ss.str();
-    }
+    std::string describe() const override { return "Buffer should have lower energies in the selected bins";}
 
 private:
+    juce::Array<Type> fftBinsValues;
     juce::dsp::FFT forwardFFT;
-    juce::dsp::WindowingFunction<float> window;
 };
 
-AudioBufferMaxEnergyMatcher AudioBufferCheckMaxEnergy (juce::Array<float> maxEnergiesArray)
-{
-    return { maxEnergiesArray };
-}
-
-class AudioBufferMinEnergyMatcher : public Catch::Matchers::MatcherBase<juce::AudioBuffer<float>>
-{
-    juce::Array<float> minEnergies;
-
-public:
-    AudioBufferMinEnergyMatcher (juce::Array<float> other) : minEnergies (other), forwardFFT (fft_order), window { fft_size, juce::dsp::WindowingFunction<float>::WindowingMethod::hann } {}
-
-    bool match (juce::AudioBuffer<float> const& in) const override
-    {
-        juce::Array<float> binEnergies = getBinEnergies (&forwardFFT, in);
-
-        for (int i = 0; i < minEnergies.size(); i++)
-        {
-            if (minEnergies[i] == -1)
-            {
-                continue;
-            }
-            if (binEnergies[i] < minEnergies[i])
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    std::string describe() const override
-    {
-        std::ostringstream ss;
-        ss << "Energies too low";
-        return ss.str();
-    }
-
-private:
-    juce::dsp::FFT forwardFFT;
-    juce::dsp::WindowingFunction<float> window;
-};
-
-AudioBufferMinEnergyMatcher AudioBufferCheckMinEnergy (juce::Array<float> minEnergiesArray)
-{
-    return { minEnergiesArray };
+template<typename Type>
+auto HasLowerFftBinEnergyThan (juce::Array<Type> fftBinsValues) -> AudioBufferLowerEnergyFftBinsMatcher<Type>{
+    return AudioBufferLowerEnergyFftBinsMatcher<Type>{fftBinsValues};
 }
