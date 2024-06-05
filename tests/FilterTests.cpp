@@ -7,7 +7,6 @@
 const int samplesPerBlock = 4096;
 const int sampleRate = 44100;
 const int channelsNumber = 2;
-
 juce::MidiBuffer midiBuffer;
 auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
 
@@ -16,9 +15,9 @@ TEST_CASE ("one is equal to one", "[dummy]")
     REQUIRE (1 == 1);
 }
 
-TEST_CASE ("Wet Parameter influence on buffer", "[drywet]")
+SCENARIO ("Wet Parameter influence on buffer value", "[drywet][parameters][amplitude]")
 {
-    auto effectedBuffer = Generators::generateNoise(channelsNumber,samplesPerBlock);
+    auto effectedBuffer = Generators::generateNoise (channelsNumber, samplesPerBlock);
     auto originalBuffer (*effectedBuffer);
 
     testPluginProcessor->prepareToPlay (sampleRate, samplesPerBlock);
@@ -27,40 +26,39 @@ TEST_CASE ("Wet Parameter influence on buffer", "[drywet]")
     juce::RangedAudioParameter* dryWetParam = parameters->getParameter (NAME_DW);
     juce::RangedAudioParameter* cutOffParam = parameters->getParameter (NAME_CUTOFF);
 
-    SECTION ("dry/wet ratio = 1.0f implies no change to the signal")
+    GIVEN ("dry/wet ratio = 1.0f implies no change to the signal")
     {
         dryWetParam->setValueNotifyingHost (1.0f);
         testPluginProcessor->processBlock (*effectedBuffer, midiBuffer);
 
-        CHECK_THAT (*effectedBuffer, matches (originalBuffer));
-        CHECK_THAT(*effectedBuffer, matchesFrequencyBinsOf(originalBuffer));
+        REQUIRE_THAT (*effectedBuffer, matches (originalBuffer));
+        REQUIRE_THAT (*effectedBuffer, matchesFrequencyBinsOf (originalBuffer));
     }
 
-    SECTION ("dry/wet ratio < 1.0f implies change to the signal")
-    {
-        auto dryWetValue = GENERATE (0.0f, 0.09f, 0.1f, 0.5f, 0.9f);
-        auto cutOffValue = GENERATE (100.0f, 1000.0f, 10000.0f);
+    auto dryWetValue = GENERATE (0.0f, 0.09f, 0.1f, 0.5f, 0.9f);
+    auto cutOffValue = GENERATE (100.0f, 1000.0f, 10000.0f);
 
-        INFO("Low pass with wet/dry = "<<dryWetValue<<" cutoff = "<<cutOffValue);
+    GIVEN ("Low pass with dry/wet = " << dryWetValue << " and cutoff = " << cutOffValue)
+    {
         dryWetParam->setValueNotifyingHost (dryWetValue);
         cutOffParam->setValueNotifyingHost (cutOffValue);
         testPluginProcessor->processBlock (*effectedBuffer, midiBuffer);
 
-            SECTION("signal is not the same")
-            {
-                CHECK_THAT(*effectedBuffer, !matches (originalBuffer));
-            }
-            SECTION("signal cumulative energy decreases")
-            {
-                CHECK_THAT (*effectedBuffer, hasLowerCumulativeEnergyThan (originalBuffer));
-            }
+        THEN ("signal is not the same")
+        {
+            REQUIRE_THAT (*effectedBuffer, !matches (originalBuffer));
+        }
+        AND_THEN ("signal cumulative energy decreases")
+        {
+            REQUIRE_THAT (*effectedBuffer, hasLowerCumulativeEnergyThan (originalBuffer));
+        }
     }
 
     // TEARDOWN
     testPluginProcessor->releaseResources();
 }
 
-TEST_CASE ("Low pass filter lowers energy in the higher bins of noise signal", "[energy]")
+TEST_CASE ("Low pass filter lowers energy in the higher bins of noise signal", "[energy][parameter][frequency]")
 {
     // SETUP
     auto effectedBuffer = Generators::generateNoise(channelsNumber,samplesPerBlock);
@@ -83,8 +81,8 @@ TEST_CASE ("Low pass filter lowers energy in the higher bins of noise signal", "
 
     // VERIFY
     INFO("freq = "<<cutoffValue<<", begin bin: "<<notEffectedRange.begin()<<", cutoff bin: "<<effectedRange.begin()<<", end bin: "<<effectedRange.end());
-    CHECK_THAT (*effectedBuffer, hasLowerFftBinEnergyThan (originalBuffer,effectedRange));
-    CHECK_THAT(*effectedBuffer, matchesFrequencyBinsOf(originalBuffer,notEffectedRange));
+    REQUIRE_THAT (*effectedBuffer, hasLowerFftBinEnergyThan (originalBuffer,effectedRange));
+    REQUIRE_THAT(*effectedBuffer, matchesFrequencyBinsOf(originalBuffer,notEffectedRange));
 
     // TEARDOWN
     testPluginProcessor->releaseResources();
