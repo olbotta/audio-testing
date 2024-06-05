@@ -1,21 +1,25 @@
-#include "Helpers.h"
+#include "Generators.h"
 #include "sine sweep/SineSweep.h"
 
-std::unique_ptr<juce::AudioBuffer<float>> Helpers::generateNoise(int channels, int samples)
+std::unique_ptr<juce::AudioBuffer<float>> Generators::generateNoise(int channels, int samples)
 {
+    juce::Random randomGenerator = juce::Random(SEED);
+
     auto buffer = std::make_unique<juce::AudioBuffer<float>>(channels, samples);
 
-    //Fill with random values ranging from -1 to 1
-    for (int i = 0; i < channels; i++) {
-        for (int j = 0; j < samples; j++) {
-            buffer->setSample(i, j, -1.0f + juce::Random::getSystemRandom().nextFloat() * 2.0f);
+        for (int s = 0; s < samples; s++)
+        {
+            auto sampleValue = -1.0f + randomGenerator.nextFloat() * 2.0f;
+            for (int c = 0; c < channels; ++c)
+            {
+                buffer->setSample (c, s, sampleValue);
+            }
         }
-    }
 
     return buffer;
 }
 
-std::unique_ptr<juce::AudioBuffer<float>>  Helpers::generateIncreasingAudioSampleBuffer(int channels, int samples)
+std::unique_ptr<juce::AudioBuffer<float>> Generators::generateIncreasingAudioSampleBuffer(int channels, int samples)
 {
     auto buffer = std::make_unique<juce::AudioBuffer<float>>(channels, samples);
 
@@ -30,7 +34,7 @@ std::unique_ptr<juce::AudioBuffer<float>>  Helpers::generateIncreasingAudioSampl
 }
 
 //TODO: test this
-std::unique_ptr<juce::AudioBuffer<float>>  Helpers::generateSineSweep(int channels, int samples, float sampleRate)
+std::unique_ptr<juce::AudioBuffer<float>> Generators::generateSineSweep(int channels, int samples, float sampleRate)
 {
     auto buffer = std::make_unique<juce::AudioBuffer<float>>(channels, samples);
     SineSweep sineSweep(sampleRate);

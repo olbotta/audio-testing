@@ -41,7 +41,7 @@ public:
         smoothedDryLevel.applyGain (drySignal, numSamples); //v3 oss: scrive numSamples! non drySignal.getNumSamples()
 
         for (int ch = wetBuffer.getNumChannels(); --ch >= 0;) //ciclo strano di presti che scorre i canali al contrario
-        {
+        {//siamo sicuri che al massimo abbassi l'energia?
             wetBuffer.addFrom (ch, 0, drySignal, ch, 0, numSamples);
         }
     }
@@ -49,8 +49,10 @@ public:
     void setDryWetRatio (const float newValue)
     {
         dryWetRatio = newValue;
-        smoothedWetLevel.setCurrentAndTargetValue (sqrt (1 - dryWetRatio));
-        smoothedDryLevel.setCurrentAndTargetValue (sqrt (dryWetRatio));
+        //smoothedWetLevel.setCurrentAndTargetValue (sqrt (1 - dryWetRatio));
+        //smoothedDryLevel.setCurrentAndTargetValue (sqrt (dryWetRatio));
+        smoothedWetLevel.setCurrentAndTargetValue (1 - dryWetRatio);
+        smoothedDryLevel.setCurrentAndTargetValue (dryWetRatio);
         //smoothedWetLevel.setTargetValue (sqrt (1 - dryWetRatio));
         //smoothedDryLevel.setTargetValue (sqrt (dryWetRatio));
     }

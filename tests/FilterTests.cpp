@@ -20,32 +20,36 @@ TEST_CASE ("one is equal to one", "[dummy]")
 TEST_CASE ("Wet Parameter influence on buffer", "[parameters]")
 {
     //auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
-    auto effectedBuffer = Helpers::generateNoise(channelsNumber,samplesPerBlock);
+    auto effectedBuffer = Generators::generateNoise(channelsNumber,samplesPerBlock);
     auto originalBuffer (*effectedBuffer);
 
     testPluginProcessor->prepareToPlay (sampleRate, samplesPerBlock);
 
     auto const* parameters = testPluginProcessor->getParameters();
     juce::RangedAudioParameter* dryWetParam = parameters->getParameter (NAME_DW);
+    juce::RangedAudioParameter* cutOffParam = parameters->getParameter (NAME_CUTOFF);
 
     SECTION ("dry/wet ratio = 1.0f implies no change to the signal")
     {
         dryWetParam->setValueNotifyingHost (1.0f);
         testPluginProcessor->processBlock (*effectedBuffer, midiBuffer);
 
-        CHECK_THAT (*effectedBuffer, AudioBuffersMatch (originalBuffer));
+        CHECK_THAT (*effectedBuffer, matches (originalBuffer));
     }
 
     SECTION ("dry/wet ratio < 1.0f implies change to the signal")
     {
-        auto dryWetValue = GENERATE (0.0f, 0.5f, 0.9f);
+        auto dryWetValue = GENERATE (0.0f, 0.09f, 0.1f, 0.5f, 0.9f);
+        auto cutOffValue = GENERATE (100.0f, 1000.0f, 10000.0f);
 
+        INFO("Low pass with wet/dry = "<<dryWetValue<<" cutoff = "<<cutOffValue);
         dryWetParam->setValueNotifyingHost (dryWetValue);
+        cutOffParam->setValueNotifyingHost (cutOffValue);
         testPluginProcessor->processBlock (*effectedBuffer, midiBuffer);
 
             SECTION("signal is not the same")
             {
-                CHECK_THAT (*effectedBuffer, !AudioBuffersMatch (originalBuffer));
+                CHECK_THAT(*effectedBuffer, !matches (originalBuffer));
             }
             SECTION("signal cumulative energy decreases")
             {

@@ -1,7 +1,7 @@
 #ifndef TEST_SETTINGS
 #define TEST_SETTINGS
-const int fft_order = 10;
-const int fft_size  = 1 << fft_order;
+const int FFT_ORDER = 10;
+const int FFT_SIZE = 1 << FFT_ORDER;
 
-const int draw_images = 1;
+const int SEED = 42;
 #endif

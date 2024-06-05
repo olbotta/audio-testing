@@ -7,12 +7,13 @@
 
 //TODO: write it using JUCE guide
 template<typename Type>
-juce::Array<Type> getBinEnergies (const juce::dsp::FFT* forwardFFT, juce::AudioBuffer<Type> in)
+juce::Array<Type> getBinEnergies (juce::AudioBuffer<Type> in)
 {
+    juce::dsp::FFT fft = juce::dsp::FFT(FFT_ORDER);
     auto* inRead = in.getArrayOfReadPointers();
 
-    std::array<Type, fft_size> inFifo;
-    std::array<Type, fft_size * 2> inFftData;
+    std::array<Type, FFT_SIZE> inFifo; // incoming audio samples
+    std::array<Type, FFT_SIZE * 2> inFftData;
     juce::Array<Type> binEnergies;
     unsigned long fifoIndex = 0;
 
@@ -20,11 +21,11 @@ juce::Array<Type> getBinEnergies (const juce::dsp::FFT* forwardFFT, juce::AudioB
     {
         for (int ch = 0; ch < in.getNumChannels(); ++ch)
         {
-            if (fifoIndex == fft_size)//end of the bin(?)
+            if (fifoIndex == FFT_SIZE)//end of the bin(?)
             {
                 std::ranges::fill (inFftData.begin(), inFftData.end(), 0.0f);//superfluo? (viene sovrascritto subito dopo)
                 std::ranges::copy (inFifo.begin(), inFifo.end(), inFftData.begin());
-                forwardFFT->performFrequencyOnlyForwardTransform (inFftData.data(), true);
+                fft.performFrequencyOnlyForwardTransform (inFftData.data(), true);
 
                 for (unsigned long fftIndex = 0; fftIndex < inFftData.size() / 2; fftIndex++)
                 {
@@ -49,8 +50,10 @@ public:
 
     bool match (juce::AudioBuffer<Type> const& other) const
     {
-        if (buffer.getNumChannels() != other.getNumChannels() || buffer.getNumSamples() != other.getNumSamples())
-            return false;
+        INFO("buffers have different channel size ("<<buffer.getNumChannels()<<", "<<other.getNumChannels()<<")");
+        REQUIRE (buffer.getNumChannels() == other.getNumChannels());
+        INFO("buffers have different sample size ("<<buffer.getNumSamples()<<", "<<other.getNumSamples()<<")");
+        REQUIRE (buffer.getNumSamples() == other.getNumSamples());
 
         auto* inRead  = buffer.getArrayOfReadPointers();
         auto* othRead = other.getArrayOfReadPointers();
@@ -60,9 +63,8 @@ public:
             for (int sam = 0; sam < buffer.getNumSamples(); ++sam)
             {
                 if (std::fabs (inRead[ch][sam] - othRead[ch][sam]) > std::numeric_limits<Type>::epsilon())
-                {
                     return false;
-                }
+
             }
         }
 
@@ -79,7 +81,7 @@ private:
 };
 
 template<typename Type>
-auto AudioBuffersMatch (juce::AudioBuffer<Type> buffer) -> AudioBufferMatcher<Type>{
+auto matches (juce::AudioBuffer<Type> buffer) -> AudioBufferMatcher<Type>{
  return AudioBufferMatcher<Type>{buffer};
 }
 
@@ -87,31 +89,26 @@ template<typename Type>
 struct AudioBufferLowerEnergyMatcher : Catch::Matchers::MatcherGenericBase
 {
 public:
-    explicit AudioBufferLowerEnergyMatcher (juce::AudioBuffer<Type> const& buffer) :
-                                                                     forwardFFT (fft_order),
-                                                                     buffer (buffer)
+    explicit AudioBufferLowerEnergyMatcher (juce::AudioBuffer<Type> const& buffer) : buffer (buffer)
     {}
 
     bool match (juce::AudioBuffer<Type> const& other) const
     { // ⚠️ @code other refers to the first argument of CHECK_THAT / REQUIRES_THAT
-        if (buffer.getNumChannels() != other.getNumChannels() || buffer.getNumSamples() != other.getNumSamples())
-            return false;
 
-        Type bufferPower = 0;
-        Type otherPower = 0;
-        juce::Array<Type> bufferEnergies = getBinEnergies (&forwardFFT, buffer);
-        juce::Array<Type> otherEnergies  = getBinEnergies (&forwardFFT, other);
+        INFO("buffers have different channel size ("<<buffer.getNumChannels()<<", "<<other.getNumChannels()<<")");
+        REQUIRE (buffer.getNumChannels() == other.getNumChannels());
+        INFO("buffers have different sample size ("<<buffer.getNumSamples()<<", "<<other.getNumSamples()<<")");
+        REQUIRE (buffer.getNumSamples() == other.getNumSamples());
 
-        for (int i = 0; i < bufferEnergies.size(); i++)
-        {
-            bufferPower += bufferEnergies[i];
-            otherPower  += otherEnergies[i];
-        }
+        juce::Array<Type> bufferEnergies = getBinEnergies (buffer);
+        juce::Array<Type> otherEnergies = getBinEnergies (other);
 
-        std::cout<< "bufferPower: " + std::to_string(bufferPower) + ", otherPower: "+ std::to_string(otherPower) + "\n";
+        Type bufferPower = std::accumulate (bufferEnergies.begin(), bufferEnergies.end(), 0.0f);
+        Type otherPower = std::accumulate (otherEnergies.begin(), otherEnergies.end(), 0.0f);
 
-        return otherPower < bufferPower;
-
+        INFO ("bufferPower (" + std::to_string (bufferPower) + ") should be lower than otherPower (" + std::to_string (otherPower) << ")");
+        //REQUIRE (otherPower >= bufferPower);
+        return std::fabs (otherPower - bufferPower) > std::numeric_limits<Type>::epsilon();
     }
 
     std::string describe() const override
@@ -120,7 +117,6 @@ public:
     }
 
 private:
-    juce::dsp::FFT forwardFFT;
     juce::AudioBuffer<Type> buffer;
 };
 
