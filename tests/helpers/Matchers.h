@@ -50,11 +50,14 @@ public:
 
     bool match (juce::AudioBuffer<Type> const& other) const
     {
-        INFO("buffers have different channel size ("<<buffer.getNumChannels()<<", "<<other.getNumChannels()<<")");
-        REQUIRE (buffer.getNumChannels() == other.getNumChannels());
-        INFO("buffers have different sample size ("<<buffer.getNumSamples()<<", "<<other.getNumSamples()<<")");
-        REQUIRE (buffer.getNumSamples() == other.getNumSamples());
-
+        {
+            INFO ("buffers have different channel size (" << buffer.getNumChannels() << ", " << other.getNumChannels() << ")");
+            REQUIRE (buffer.getNumChannels() == other.getNumChannels());
+        }
+        {
+            INFO ("buffers have different sample size (" << buffer.getNumSamples() << ", " << other.getNumSamples() << ")");
+            REQUIRE (buffer.getNumSamples() == other.getNumSamples());
+        }
         auto* inRead  = buffer.getArrayOfReadPointers();
         auto* othRead = other.getArrayOfReadPointers();
 
@@ -95,11 +98,6 @@ public:
     bool match (juce::AudioBuffer<Type> const& other) const
     { // ⚠️ @code other refers to the first argument of CHECK_THAT / REQUIRES_THAT
 
-        INFO("buffers have different channel size ("<<buffer.getNumChannels()<<", "<<other.getNumChannels()<<")");
-        REQUIRE (buffer.getNumChannels() == other.getNumChannels());
-        INFO("buffers have different sample size ("<<buffer.getNumSamples()<<", "<<other.getNumSamples()<<")");
-        REQUIRE (buffer.getNumSamples() == other.getNumSamples());
-
         juce::Array<Type> bufferEnergies = getBinEnergies<Type> (buffer);
         juce::Array<Type> otherEnergies = getBinEnergies<Type> (other);
 
@@ -108,7 +106,7 @@ public:
 
         //std::cout<<"bufferPower (" + std::to_string (bufferPower) + ") should be lower than otherPower (" + std::to_string (otherPower) << ")\n";
         UNSCOPED_INFO ("bufferPower (" + std::to_string (bufferPower) + ") should be lower than otherPower (" + std::to_string (otherPower) << ")");
-        return std::fabs (otherPower - bufferPower) > std::numeric_limits<Type>::epsilon();
+        return bufferPower - otherPower > std::numeric_limits<Type>::epsilon();
     }
 
     std::string describe() const override
@@ -149,7 +147,7 @@ public:
             UNSCOPED_INFO("Buffer should have lower energy than other in each selected bins, got "<<bufferBinEnergies[i]<<" < "<<otherBinEnergies[i]);
             //REQUIRE(otherBinEnergies[i] < bufferBinEnergies[i]);
 
-            if (bufferBinEnergies[i] < otherBinEnergies[i])
+            if (otherBinEnergies[i] > bufferBinEnergies[i])
                 return false;
         }
         return true;
