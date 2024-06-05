@@ -8,19 +8,16 @@ const int samplesPerBlock = 4096;
 const int sampleRate = 44100;
 const int channelsNumber = 2;
 
-//juce::MidiBuffer midiBuffer;
-//auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
-//std::cout << "one";
+juce::MidiBuffer midiBuffer;
+auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
 
 TEST_CASE ("one is equal to one", "[dummy]")
 {
     REQUIRE (1 == 1);
 }
 
-TEST_CASE ("Wet Parameter influence on buffer", "[parameters]")
+TEST_CASE ("Wet Parameter influence on buffer", "[drywet]")
 {
-    auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
-    juce::MidiBuffer midiBuffer;
     auto effectedBuffer = Generators::generateNoise(channelsNumber,samplesPerBlock);
     auto originalBuffer (*effectedBuffer);
 
@@ -36,6 +33,7 @@ TEST_CASE ("Wet Parameter influence on buffer", "[parameters]")
         testPluginProcessor->processBlock (*effectedBuffer, midiBuffer);
 
         CHECK_THAT (*effectedBuffer, matches (originalBuffer));
+        CHECK_THAT(*effectedBuffer, matchesFrequencyBinsOf(originalBuffer));
     }
 
     SECTION ("dry/wet ratio < 1.0f implies change to the signal")
@@ -54,7 +52,7 @@ TEST_CASE ("Wet Parameter influence on buffer", "[parameters]")
             }
             SECTION("signal cumulative energy decreases")
             {
-                CHECK_THAT (*effectedBuffer, HasLowerCumulativeEnergyThan (originalBuffer));
+                CHECK_THAT (*effectedBuffer, hasLowerCumulativeEnergyThan (originalBuffer));
             }
     }
 
@@ -62,11 +60,9 @@ TEST_CASE ("Wet Parameter influence on buffer", "[parameters]")
     testPluginProcessor->releaseResources();
 }
 
-TEST_CASE ("Low pass filter lowers energy in the higher bins of noise signal", "[functionality]")
+TEST_CASE ("Low pass filter lowers energy in the higher bins of noise signal", "[energy]")
 {
     // SETUP
-    auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
-    juce::MidiBuffer midiBuffer;
     auto effectedBuffer = Generators::generateNoise(channelsNumber,samplesPerBlock);
     auto originalBuffer (*effectedBuffer);
 
@@ -75,18 +71,20 @@ TEST_CASE ("Low pass filter lowers energy in the higher bins of noise signal", "
     auto const* parameters = testPluginProcessor->getParameters();
     juce::RangedAudioParameter* cutoffParam = parameters->getParameter (NAME_CUTOFF);
 
-    auto cutoffValue = GENERATE (2000.0f);//, 1000.0f, 10000.0f);
+    auto cutoffValue = GENERATE (2000.0f, 1000.0f, 10000.0f);
 
     cutoffParam->setValueNotifyingHost (cutoffValue);
     testPluginProcessor->processBlock (*effectedBuffer, midiBuffer);
 
     auto comparisonBins = juce::Array<float> ();
-    auto range = juce::makeRange((int)((cutoffValue/20000.0f)*(FFT_SIZE*2)), FFT_SIZE);
-    //auto range = juce::makeRange(FFT_SIZE-550, FFT_SIZE);
+    auto cutoffBin = (int)std::floor((cutoffValue/20000.0f)*(FFT_SIZE/2));
+    auto notEffectedRange = juce::makeRange(0, cutoffBin-1);
+    auto effectedRange = juce::makeRange(cutoffBin, FFT_SIZE/2);
 
     // VERIFY
-    std::cout<<range.begin()<<" "<<range.end()<<"\n";
-    CHECK_THAT (*effectedBuffer, HasLowerFftBinEnergyThan (originalBuffer,range));
+    INFO("freq = "<<cutoffValue<<", begin bin: "<<notEffectedRange.begin()<<", cutoff bin: "<<effectedRange.begin()<<", end bin: "<<effectedRange.end());
+    CHECK_THAT (*effectedBuffer, hasLowerFftBinEnergyThan (originalBuffer,effectedRange));
+    CHECK_THAT(*effectedBuffer, matchesFrequencyBinsOf(originalBuffer,notEffectedRange));
 
     // TEARDOWN
     testPluginProcessor->releaseResources();

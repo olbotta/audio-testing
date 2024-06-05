@@ -4,7 +4,7 @@
 #include "juce_audio_processors/juce_audio_processors.h"
 #include "juce_dsp/juce_dsp.h"
 #include <utility>
-#include "ImageProcessing.h"
+
 
 template<typename Type>
 juce::Array<Type> getBinEnergies (juce::AudioBuffer<Type> in)
@@ -14,13 +14,11 @@ juce::Array<Type> getBinEnergies (juce::AudioBuffer<Type> in)
 
     std::array<Type, FFT_SIZE> inFifo; // incoming audio samples
     std::array<Type, FFT_SIZE * 2> inFftData;
-    juce::Array<Type> binEnergies;
+    juce::Array<Type> binEnergies; //of lenght FFT_SIZE
     unsigned long fifoIndex = 0;
 
     for (int sam = 0; sam < in.getNumSamples(); ++sam)
     {
-        for (int ch = 0; ch < in.getNumChannels(); ++ch)
-        {
             if (fifoIndex == FFT_SIZE)//end of the bin(?)
             {
                 std::ranges::fill (inFftData.begin(), inFftData.end(), 0.0f);//superfluo? (viene sovrascritto subito dopo)
@@ -34,9 +32,9 @@ juce::Array<Type> getBinEnergies (juce::AudioBuffer<Type> in)
 
                 fifoIndex = 0;
             }
-            inFifo[fifoIndex] = inRead[ch][sam];
+            inFifo[fifoIndex] = inRead[0][sam];
             fifoIndex++;
-        }
+
     }
 
     return binEnergies;
@@ -65,7 +63,7 @@ public:
         {
             for (int sam = 0; sam < buffer.getNumSamples(); ++sam)
             {
-                if (std::fabs (inRead[ch][sam] - othRead[ch][sam]) > std::numeric_limits<Type>::epsilon())
+                if (std::fabs (inRead[ch][sam] - othRead[ch][sam]) > EQUALITY_TOLERANCE)
                     return false;
 
             }
@@ -89,10 +87,10 @@ auto matches (juce::AudioBuffer<Type> buffer) -> AudioBufferMatcher<Type>{
 }
 
 template<typename Type>
-struct AudioBufferLowerEnergyMatcher : Catch::Matchers::MatcherGenericBase
+struct AudioBufferLowerCumulativeEnergyMatcher : Catch::Matchers::MatcherGenericBase
 {
 public:
-    explicit AudioBufferLowerEnergyMatcher (juce::AudioBuffer<Type> const& buffer) : buffer (buffer)
+    explicit AudioBufferLowerCumulativeEnergyMatcher (juce::AudioBuffer<Type> const& buffer) : buffer (buffer)
     {}
 
     bool match (juce::AudioBuffer<Type> const& other) const
@@ -104,7 +102,6 @@ public:
         Type bufferPower = std::accumulate (bufferEnergies.begin(), bufferEnergies.end(), 0.0f);
         Type otherPower = std::accumulate (otherEnergies.begin(), otherEnergies.end(), 0.0f);
 
-        //std::cout<<"bufferPower (" + std::to_string (bufferPower) + ") should be lower than otherPower (" + std::to_string (otherPower) << ")\n";
         UNSCOPED_INFO ("bufferPower (" + std::to_string (bufferPower) + ") should be lower than otherPower (" + std::to_string (otherPower) << ")");
         return bufferPower - otherPower > std::numeric_limits<Type>::epsilon();
     }
@@ -119,15 +116,15 @@ private:
 };
 
 template<typename Type>
-auto HasLowerCumulativeEnergyThan (juce::AudioBuffer<Type> buffer) -> AudioBufferLowerEnergyMatcher<Type>{
-    return AudioBufferLowerEnergyMatcher<Type>{buffer};
+auto hasLowerCumulativeEnergyThan (juce::AudioBuffer<Type> buffer) -> AudioBufferLowerCumulativeEnergyMatcher<Type>{
+    return AudioBufferLowerCumulativeEnergyMatcher<Type>{buffer};
 }
 
 template<typename Type>
-struct AudioBufferLowerEnergyFftBinsMatcher : public Catch::Matchers::MatcherGenericBase
+struct AudioBufferLowerEnergyFreqBinsMatcher : public Catch::Matchers::MatcherGenericBase
 {
 public:
-    explicit AudioBufferLowerEnergyFftBinsMatcher (juce::AudioBuffer<Type> buffer,  juce::IteratorPair<int,int> range ) :
+    explicit AudioBufferLowerEnergyFreqBinsMatcher (juce::AudioBuffer<Type> buffer,  juce::IteratorPair<int,int> range ) :
                                                                                                                buffer(buffer),
                                                                                                                range(range)
     {}
@@ -135,20 +132,22 @@ public:
     bool match (juce::AudioBuffer<Type> const& other) const
     {
         juce::Array<Type> bufferBinEnergies = getBinEnergies<Type> (buffer);
-        juce::Array<Type> otherBinEnergies = getBinEnergies<Type> (other);
+        juce::Array<Type> otherBinEnergies = getBinEnergies<Type> (other);//effected
 
         {
             INFO ("endBin (" << range.end() << ") should be <= than number of bins calculated by fft(" << bufferBinEnergies.size() << ")");
             REQUIRE (range.end() <= bufferBinEnergies.size());
         }
 
-        for (int i = range.begin(); i <= range.end(); i++) {
+        for (int bin = range.begin(); bin <= range.end(); bin++)
+        {
+                UNSCOPED_INFO ("Buffer should have lower energy than other in each selected bin, got "
+                               <<": "<<bufferBinEnergies[bin]<< "-"<<otherBinEnergies[bin]<<"= "<<bufferBinEnergies[bin] - otherBinEnergies[bin]<<" in bin "<<bin);
+                //REQUIRE(bufferBinEnergies[bin] - otherBinEnergies[bin] > - FILTER_TOLERANCE);
 
-            UNSCOPED_INFO("Buffer should have lower energy than other in each selected bins, got "<<bufferBinEnergies[i]<<" < "<<otherBinEnergies[i]);
-            //REQUIRE(otherBinEnergies[i] < bufferBinEnergies[i]);
+                if (bufferBinEnergies[bin] - otherBinEnergies[bin] <= -FILTER_TOLERANCE)
+                  return false;
 
-            if (otherBinEnergies[i] > bufferBinEnergies[i])
-                return false;
         }
         return true;
     }
@@ -161,6 +160,49 @@ private:
 };
 
 template<typename Type>
-auto HasLowerFftBinEnergyThan (juce::AudioBuffer<Type> buffer, juce::IteratorPair<int,int> range = juce::makeRange(0,FFT_SIZE/2)) -> AudioBufferLowerEnergyFftBinsMatcher<Type>{
-    return AudioBufferLowerEnergyFftBinsMatcher<Type>{buffer,range};
+auto hasLowerFftBinEnergyThan (juce::AudioBuffer<Type> buffer, juce::IteratorPair<int,int> range = juce::makeRange(0,FFT_SIZE/2)) -> AudioBufferLowerEnergyFreqBinsMatcher<Type>{
+    return AudioBufferLowerEnergyFreqBinsMatcher<Type>{buffer,range};
+}
+
+template<typename Type>
+struct AudioBufferFrequenciesMatcher : public Catch::Matchers::MatcherGenericBase
+{
+public:
+    explicit AudioBufferFrequenciesMatcher (juce::AudioBuffer<Type> buffer,  juce::IteratorPair<int,int> range ) :
+                                                                                                                  buffer(buffer),
+                                                                                                                  range(range)
+    {}
+
+    bool match (juce::AudioBuffer<Type> const& other) const
+    {
+        juce::Array<Type> bufferBinEnergies = getBinEnergies<Type> (buffer);
+        juce::Array<Type> otherBinEnergies = getBinEnergies<Type> (other);//effected
+
+        {
+            INFO ("endBin (" << range.end() << ") should be <= than number of bins calculated by fft(" << bufferBinEnergies.size() << ")");
+            REQUIRE (range.end() <= bufferBinEnergies.size());
+        }
+
+        for (int bin = range.begin(); bin <= range.end(); bin++)
+        {
+            UNSCOPED_INFO ("Buffer should have same magnitude in the selected frequency bins, got "
+                           <<": abs("<<bufferBinEnergies[bin]<< "-"<<otherBinEnergies[bin]<<")= "<<abs(bufferBinEnergies[bin] - otherBinEnergies[bin])<<" in bin "<<bin);
+
+            if (std::fabs(bufferBinEnergies[bin] - otherBinEnergies[bin]) > FILTER_TOLERANCE*5)
+                return false;
+
+        }
+        return true;
+    }
+
+    std::string describe() const override { return "Buffer should have same magnitude in the selected frequency bins";}
+
+private:
+    juce::AudioBuffer<Type> buffer;
+    juce::IteratorPair<int, int> range;
+};
+
+template<typename Type>
+auto matchesFrequencyBinsOf (juce::AudioBuffer<Type> buffer, juce::IteratorPair<int,int> range = juce::makeRange(0,FFT_SIZE/2)) -> AudioBufferFrequenciesMatcher<Type>{
+    return AudioBufferFrequenciesMatcher<Type>{buffer,range};
 }
