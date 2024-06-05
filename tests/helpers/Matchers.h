@@ -4,39 +4,36 @@
 #include "juce_audio_processors/juce_audio_processors.h"
 #include "juce_dsp/juce_dsp.h"
 #include <utility>
+#include "ImageProcessing.h"
 
-//TODO: write it using JUCE guide
-template<typename Type>
-juce::Array<Type> getBinEnergies (juce::AudioBuffer<Type> in)
+template<typename Type, size_t fftSize>
+juce::Array<Type> getBinEnergies (juce::AudioBuffer<Type> buffer)
 {
-    juce::dsp::FFT fft = juce::dsp::FFT(FFT_ORDER);
-    auto* inRead = in.getArrayOfReadPointers();
-
-    std::array<Type, FFT_SIZE> inFifo; // incoming audio samples
-    std::array<Type, FFT_SIZE * 2> inFftData;
+    auto fft = juce::dsp::FFT (fftSize);
+    std::array<Type, fftSize * 2> blockCopy;
+    //std::array<Type, fftSize> binEnergies;
     juce::Array<Type> binEnergies;
-    unsigned long fifoIndex = 0;
 
-    for (int sam = 0; sam < in.getNumSamples(); ++sam)
+        //auto inRead = buffer.getArrayOfReadPointers();
+    auto bufferCopy = juce::AudioBuffer<Type>(buffer);
+    int blockCount = buffer.getNumSamples() / fftSize;
+
+    for (int blockBegin = 0; blockBegin < blockCount; blockBegin += fftSize)
     {
-        for (int ch = 0; ch < in.getNumChannels(); ++ch)
+        std::ranges::fill (blockCopy.begin(), blockCopy.end(), 0.0f); // reset the in/out
+        for (int i = blockBegin; i < fftSize; i++) //copy in buffer
+            blockCopy[i] = bufferCopy.getSample(1,i);//TODO: optimize
+
+        fft.performFrequencyOnlyForwardTransform (blockCopy.data(), true);
+
+        for (unsigned long bin = 0; bin < blockCopy.size() / 2; bin++) // we only care about the first half ot the output
         {
-            if (fifoIndex == FFT_SIZE)//end of the bin(?)
-            {
-                std::ranges::fill (inFftData.begin(), inFftData.end(), 0.0f);//superfluo? (viene sovrascritto subito dopo)
-                std::ranges::copy (inFifo.begin(), inFifo.end(), inFftData.begin());
-                fft.performFrequencyOnlyForwardTransform (inFftData.data(), true);
-
-                for (unsigned long fftIndex = 0; fftIndex < inFftData.size() / 2; fftIndex++)
-                {
-                    binEnergies.set (fftIndex, binEnergies[fftIndex] + inFftData[fftIndex]);
-                }
-
-                fifoIndex = 0;
-            }
-            inFifo[fifoIndex] = inRead[ch][sam];
-            fifoIndex++;
+            //binEnergies[bin] += blockCopy[bin];
+            binEnergies.set(bin,binEnergies[bin] + blockCopy[bin]);
         }
+
+        //std::transform(blockCopy.begin(), blockCopy.end(), binEnergies.begin(), std::plus<>());
+
     }
 
     return binEnergies;
@@ -100,14 +97,14 @@ public:
         INFO("buffers have different sample size ("<<buffer.getNumSamples()<<", "<<other.getNumSamples()<<")");
         REQUIRE (buffer.getNumSamples() == other.getNumSamples());
 
-        juce::Array<Type> bufferEnergies = getBinEnergies (buffer);
-        juce::Array<Type> otherEnergies = getBinEnergies (other);
+        juce::Array<Type> bufferEnergies = getBinEnergies<Type,FFT_SIZE> (buffer);
+        juce::Array<Type> otherEnergies = getBinEnergies<Type,FFT_SIZE> (other);
 
         Type bufferPower = std::accumulate (bufferEnergies.begin(), bufferEnergies.end(), 0.0f);
         Type otherPower = std::accumulate (otherEnergies.begin(), otherEnergies.end(), 0.0f);
 
-        INFO ("bufferPower (" + std::to_string (bufferPower) + ") should be lower than otherPower (" + std::to_string (otherPower) << ")");
-        //REQUIRE (otherPower >= bufferPower);
+        std::cout<<"bufferPower (" + std::to_string (bufferPower) + ") should be lower than otherPower (" + std::to_string (otherPower) << ")\n";
+        UNSCOPED_INFO ("bufferPower (" + std::to_string (bufferPower) + ") should be lower than otherPower (" + std::to_string (otherPower) << ")");
         return std::fabs (otherPower - bufferPower) > std::numeric_limits<Type>::epsilon();
     }
 
@@ -129,21 +126,27 @@ template<typename Type>
 struct AudioBufferLowerEnergyFftBinsMatcher : public Catch::Matchers::MatcherGenericBase
 {
 public:
-    explicit AudioBufferLowerEnergyFftBinsMatcher (juce::Array<Type> fftBinsValues) :
-                                                                    fftBinsValues (fftBinsValues),
-                                                                    forwardFFT (fft_order)
+    explicit AudioBufferLowerEnergyFftBinsMatcher (juce::AudioBuffer<Type> buffer,  juce::IteratorPair<int,int> range ) :
+                                                                                                               buffer(buffer),
+                                                                                                               range(range)
     {}
 
     bool match (juce::AudioBuffer<Type> const& other) const
     {
-        juce::Array<Type> bufferBinEnergies = getBinEnergies (&forwardFFT, other);
+        juce::Array<Type> bufferBinEnergies = getBinEnergies<Type,FFT_SIZE> (buffer);
+        juce::Array<Type> otherBinEnergies = getBinEnergies<Type,FFT_SIZE> (other);
 
-        for (int i = 0; i < fftBinsValues.size(); i++)
         {
-            if (fftBinsValues[i] == -1)//flagged as don't control TODO: refactor to more clear function
-                continue;
+            INFO ("endBin (" << range.end() << ") should be <= than number of bins calculated by fft(" << bufferBinEnergies.size() << ")");
+            REQUIRE (range.end() <= bufferBinEnergies.size());
+        }
 
-            if (bufferBinEnergies[i] < fftBinsValues[i])
+        for (int i = range.begin(); i <= range.end(); i++) {
+
+            UNSCOPED_INFO("Buffer should have lower energy than other in each selected bins, got "<<bufferBinEnergies[i]<<" < "<<otherBinEnergies[i]);
+            //REQUIRE(otherBinEnergies[i] < bufferBinEnergies[i]);
+
+            if (bufferBinEnergies[i] < otherBinEnergies[i])
                 return false;
         }
         return true;
@@ -152,11 +155,11 @@ public:
     std::string describe() const override { return "Buffer should have lower energies in the selected bins";}
 
 private:
-    juce::Array<Type> fftBinsValues;
-    juce::dsp::FFT forwardFFT;
+    juce::AudioBuffer<Type> buffer;
+    juce::IteratorPair<int, int> range;
 };
 
 template<typename Type>
-auto HasLowerFftBinEnergyThan (juce::Array<Type> fftBinsValues) -> AudioBufferLowerEnergyFftBinsMatcher<Type>{
-    return AudioBufferLowerEnergyFftBinsMatcher<Type>{fftBinsValues};
+auto HasLowerFftBinEnergyThan (juce::AudioBuffer<Type> buffer, juce::IteratorPair<int,int> range = juce::makeRange(0,FFT_SIZE/2)) -> AudioBufferLowerEnergyFftBinsMatcher<Type>{
+    return AudioBufferLowerEnergyFftBinsMatcher<Type>{buffer,range};
 }

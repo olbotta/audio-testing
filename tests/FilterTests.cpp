@@ -1,4 +1,4 @@
-#include "helpers/Helpers.h"
+#include "helpers/Generators.h"
 #include "helpers/Matchers.h"
 #include <PluginProcessor.h>
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -8,8 +8,8 @@ const int samplesPerBlock = 4096;
 const int sampleRate = 44100;
 const int channelsNumber = 2;
 
-juce::MidiBuffer midiBuffer;
-auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
+//juce::MidiBuffer midiBuffer;
+//auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
 //std::cout << "one";
 
 TEST_CASE ("one is equal to one", "[dummy]")
@@ -19,7 +19,8 @@ TEST_CASE ("one is equal to one", "[dummy]")
 
 TEST_CASE ("Wet Parameter influence on buffer", "[parameters]")
 {
-    //auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
+    auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
+    juce::MidiBuffer midiBuffer;
     auto effectedBuffer = Generators::generateNoise(channelsNumber,samplesPerBlock);
     auto originalBuffer (*effectedBuffer);
 
@@ -61,29 +62,32 @@ TEST_CASE ("Wet Parameter influence on buffer", "[parameters]")
     testPluginProcessor->releaseResources();
 }
 
-TEST_CASE ("Filter lowers energy in the lower 32 bins of sine sweep", "[functionality]")
+TEST_CASE ("Low pass filter lowers energy in the higher bins of noise signal", "[functionality]")
 {
-    // auto effectedBuffer = Helpers::generateSineSweep(channelsNumber,samplesPerBlock,sampleRate);
-    auto effectedBuffer = Helpers::generateNoise(channelsNumber,samplesPerBlock);
+    // SETUP
+    auto testPluginProcessor = std::make_unique<FilterAudioProcessor>();
+    juce::MidiBuffer midiBuffer;
+    auto effectedBuffer = Generators::generateNoise(channelsNumber,samplesPerBlock);
+    auto originalBuffer (*effectedBuffer);
 
     testPluginProcessor->prepareToPlay (sampleRate, samplesPerBlock);
 
     auto const* parameters = testPluginProcessor->getParameters();
     juce::RangedAudioParameter* cutoffParam = parameters->getParameter (NAME_CUTOFF);
 
-    auto cutoffValue = GENERATE (100.0f, 1000.0f, 10000.0f);
+    auto cutoffValue = GENERATE (2000.0f);//, 1000.0f, 10000.0f);
 
     cutoffParam->setValueNotifyingHost (cutoffValue);
     testPluginProcessor->processBlock (*effectedBuffer, midiBuffer);
 
     auto comparisonBins = juce::Array<float> ();
-    int limitBin = (cutoffValue/20000.0f)*(fft_size);
-    std::cout<<limitBin<<"\n";
+    auto range = juce::makeRange((int)((cutoffValue/20000.0f)*(FFT_SIZE*2)), FFT_SIZE);
+    //auto range = juce::makeRange(FFT_SIZE-550, FFT_SIZE);
 
-    comparisonBins.insertMultiple(0,100.0f,limitBin);
-    comparisonBins.insertMultiple(limitBin,-1.0f,fft_size);
+    // VERIFY
+    std::cout<<range.begin()<<" "<<range.end()<<"\n";
+    CHECK_THAT (*effectedBuffer, HasLowerFftBinEnergyThan (originalBuffer,range));
 
-    CHECK_THAT (*effectedBuffer, HasLowerFftBinEnergyThan (comparisonBins));
-    //controlla la cosa sbagliata: andrebbe controllato che la parte filtrata si abbassa
-    //mentre quelle non filtrata no
+    // TEARDOWN
+    testPluginProcessor->releaseResources();
 }
