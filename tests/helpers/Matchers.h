@@ -6,34 +6,37 @@
 #include <utility>
 #include "ImageProcessing.h"
 
-template<typename Type, size_t fftSize>
-juce::Array<Type> getBinEnergies (juce::AudioBuffer<Type> buffer)
+template<typename Type>
+juce::Array<Type> getBinEnergies (juce::AudioBuffer<Type> in)
 {
-    auto fft = juce::dsp::FFT (fftSize);
-    std::array<Type, fftSize * 2> blockCopy;
-    //std::array<Type, fftSize> binEnergies;
+    juce::dsp::FFT fft = juce::dsp::FFT(FFT_ORDER);
+    auto* inRead = in.getArrayOfReadPointers();
+
+    std::array<Type, FFT_SIZE> inFifo; // incoming audio samples
+    std::array<Type, FFT_SIZE * 2> inFftData;
     juce::Array<Type> binEnergies;
+    unsigned long fifoIndex = 0;
 
-        //auto inRead = buffer.getArrayOfReadPointers();
-    auto bufferCopy = juce::AudioBuffer<Type>(buffer);
-    int blockCount = buffer.getNumSamples() / fftSize;
-
-    for (int blockBegin = 0; blockBegin < blockCount; blockBegin += fftSize)
+    for (int sam = 0; sam < in.getNumSamples(); ++sam)
     {
-        std::ranges::fill (blockCopy.begin(), blockCopy.end(), 0.0f); // reset the in/out
-        for (int i = blockBegin; i < fftSize; i++) //copy in buffer
-            blockCopy[i] = bufferCopy.getSample(1,i);//TODO: optimize
-
-        fft.performFrequencyOnlyForwardTransform (blockCopy.data(), true);
-
-        for (unsigned long bin = 0; bin < blockCopy.size() / 2; bin++) // we only care about the first half ot the output
+        for (int ch = 0; ch < in.getNumChannels(); ++ch)
         {
-            //binEnergies[bin] += blockCopy[bin];
-            binEnergies.set(bin,binEnergies[bin] + blockCopy[bin]);
+            if (fifoIndex == FFT_SIZE)//end of the bin(?)
+            {
+                std::ranges::fill (inFftData.begin(), inFftData.end(), 0.0f);//superfluo? (viene sovrascritto subito dopo)
+                std::ranges::copy (inFifo.begin(), inFifo.end(), inFftData.begin());
+                fft.performFrequencyOnlyForwardTransform (inFftData.data(), true);
+
+                for (unsigned long fftIndex = 0; fftIndex < inFftData.size() / 2; fftIndex++)
+                {
+                    binEnergies.set (fftIndex, binEnergies[fftIndex] + inFftData[fftIndex]);
+                }
+
+                fifoIndex = 0;
+            }
+            inFifo[fifoIndex] = inRead[ch][sam];
+            fifoIndex++;
         }
-
-        //std::transform(blockCopy.begin(), blockCopy.end(), binEnergies.begin(), std::plus<>());
-
     }
 
     return binEnergies;
@@ -97,13 +100,13 @@ public:
         INFO("buffers have different sample size ("<<buffer.getNumSamples()<<", "<<other.getNumSamples()<<")");
         REQUIRE (buffer.getNumSamples() == other.getNumSamples());
 
-        juce::Array<Type> bufferEnergies = getBinEnergies<Type,FFT_SIZE> (buffer);
-        juce::Array<Type> otherEnergies = getBinEnergies<Type,FFT_SIZE> (other);
+        juce::Array<Type> bufferEnergies = getBinEnergies<Type> (buffer);
+        juce::Array<Type> otherEnergies = getBinEnergies<Type> (other);
 
         Type bufferPower = std::accumulate (bufferEnergies.begin(), bufferEnergies.end(), 0.0f);
         Type otherPower = std::accumulate (otherEnergies.begin(), otherEnergies.end(), 0.0f);
 
-        std::cout<<"bufferPower (" + std::to_string (bufferPower) + ") should be lower than otherPower (" + std::to_string (otherPower) << ")\n";
+        //std::cout<<"bufferPower (" + std::to_string (bufferPower) + ") should be lower than otherPower (" + std::to_string (otherPower) << ")\n";
         UNSCOPED_INFO ("bufferPower (" + std::to_string (bufferPower) + ") should be lower than otherPower (" + std::to_string (otherPower) << ")");
         return std::fabs (otherPower - bufferPower) > std::numeric_limits<Type>::epsilon();
     }
@@ -133,8 +136,8 @@ public:
 
     bool match (juce::AudioBuffer<Type> const& other) const
     {
-        juce::Array<Type> bufferBinEnergies = getBinEnergies<Type,FFT_SIZE> (buffer);
-        juce::Array<Type> otherBinEnergies = getBinEnergies<Type,FFT_SIZE> (other);
+        juce::Array<Type> bufferBinEnergies = getBinEnergies<Type> (buffer);
+        juce::Array<Type> otherBinEnergies = getBinEnergies<Type> (other);
 
         {
             INFO ("endBin (" << range.end() << ") should be <= than number of bins calculated by fft(" << bufferBinEnergies.size() << ")");
