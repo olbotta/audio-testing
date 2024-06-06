@@ -5,6 +5,7 @@
 ```shell
 cmake -B build
 cmake --build ./build --parallel
+./build/Tests
 ```
 
 ## Acknowledgements
