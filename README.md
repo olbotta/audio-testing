@@ -8,4 +8,4 @@ cmake --build ./build --parallel
 ```
 
 ## Acknowledgements
-Based on the [PAMPLEJUCE](https://github.com/sudara/pamplejuce/) template.
+Based on the [PAMPLEJUCE](https://github.com/sudara/pamplejuce/) template, code takes also some inspiration from [here](https://github.com/ejaaskel/FilterUnitTest).
