@@ -1,4 +1,7 @@
 # JUCE Audio Processors Testing with CATCH2
+Starting from the PAMPLEJUCE template, here is an implementation on how to implement some unit testing of a lowpass filter.
+you can find the classes filter class that is tested in `/source`.
+The test cases can be found in `tests/FilterTests.cpp`
 
 ## Usage
 
