@@ -53,6 +53,9 @@ public:
         //smoothedDryLevel.setCurrentAndTargetValue (sqrt (dryWetRatio));
         smoothedWetLevel.setCurrentAndTargetValue (1 - dryWetRatio);
         smoothedDryLevel.setCurrentAndTargetValue (dryWetRatio);
+
+        //smoothedWetLevel.setTargetValue (1 - dryWetRatio);
+        //smoothedDryLevel.setTargetValue (dryWetRatio);
         //smoothedWetLevel.setTargetValue (sqrt (1 - dryWetRatio));
         //smoothedDryLevel.setTargetValue (sqrt (dryWetRatio));
     }
