@@ -2,10 +2,13 @@
 
 Starting from the PAMPLEJUCE template, here is an example on how to implement some unit testing of a lowpass filter.
 Both time domain and frequency domain tests were implemented.
+
+**Note that the examples provided still have big margins of improvements, this is more of a proof of concept.**
+
 The filter class is located in `/source` and test cases can be found in `tests/FilterTests.cpp`
 
 ## How to start
-assuming you already know JUCE and how to use its Cake integration:
+assuming you already know JUCE and how to use its CMake integration:
 
 - read [CATCH2 documentation](https://github.com/catchorg/Catch2/tree/devel/docs)
 - implement your own JUCE class and put it in `/source`
